@@ -264,38 +264,6 @@ architecture i2c_module_arch of i2c_module is
                         end if;
                 end case;
             end if;
-        
---            if(rising_edge(s_HALFSCL_int) and (cycle_cnt = 1)) then -- SDA output
---                case(next_state) is 
---                    when ADDR => 
---                        s_SCL_int <= '0';
---                        s_SDA_int <= test_addr(7);  
---                        addr_buf <= shift_left(unsigned(test_addr), 1);  
---                    when ADDR2 | ADDR3 | ADDR4 | ADDR5 | ADDR6 | ADDR7 =>
---                        s_SCL_int <= not s_SCL_int;
---                        s_SDA_int <= addr_buf(7);
---                        addr_buf <= shift_left(addr_buf, 1);
---                    when RW | ACK1 => 
---                        s_SCL_int <= not s_SCL_int;
---                    when DATA1 =>
---                        s_SCL_int <= not s_SCL_int;
---                        s_SDA_int <= test_data(7);
---                        data_buf <= shift_left(unsigned(test_data), 1);
---                    when DATA2 | DATA3 | DATA4 | DATA5 | DATA6 | DATA7  =>
---                        s_SCL_int <= not s_SCL_int;
---                        s_SDA_int <= data_buf(7);
---                        data_buf <= shift_left(data_buf, 1);
---                    when DATA8 => 
---                        s_SCL_int <= not s_SCL_int;
---                        s_SDA_int <= '0';
---                    when ACKN => 
---                        s_SCL_int <= not s_SCL_int;
---                    when STOP => 
---                        s_SCL_int <= not s_SCL_int;
---                    when others => 
---                        --cnt <= 6;
---                end case;
---            end if;
             
     end process;
     
