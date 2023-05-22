@@ -14,17 +14,30 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
+package misc_pkg is
+    type DataArray is array (natural range <>) of std_logic_vector(7 downto 0);
+end package;
+use work.misc_pkg.all;
+
+library IEEE;
+use IEEE.std_logic_1164.all;
+use IEEE.numeric_std.all;
+
 entity i2c_module is
     port(
         i_RESET : in std_logic;				-- Active low reset
         i_CLK : in std_logic;				-- ASSUMING: 100 MHz 
         --i_start_flag : in std_logic;
+--        i_data : in DataArray(0 to 2);
+--        i_addr : in std_logic_vector(7 downto 0);
         io_SCL : inout std_logic;			
         io_SDA : inout std_logic		
     );
 end entity;
 
+
 architecture i2c_module_arch of i2c_module is
+    
 	-- Initializations
 	type state_type is (IDLE, START, START2, START3,
 	                    ADDR, ADDR2, ADDR3, ADDR4, ADDR5, ADDR6, ADDR7,
@@ -36,53 +49,92 @@ architecture i2c_module_arch of i2c_module is
 	
 	signal i_start_flag : std_logic := '1';    -- temporary
 	
-	signal halfcount_int : integer range 0 to 100000;
+	signal halfcount_int : integer range 0 to 100000 := 0;
 	signal delay_count : integer range 0 to 20;
 	signal cnt : integer range 0 to 20;
-	signal cycle_cnt : integer range 0 to 3;
+	signal cycle_cnt : integer range 0 to 3 := 0;
 
 	signal s_BYTECNT_int : integer range 0 to 10000 := 2; 
 	signal s_SENTCNT_int : integer range 0 to 10000;
 	
-	signal s_SDA_int : std_logic; 
+	signal s_SDA_int : std_logic := '1'; 
 	signal s_SDA_EN : std_logic;
 	signal s_SCL_EN : std_logic;
 	signal s_SCL_int : std_logic := '1';
 	
 	signal s_START_int : std_logic;
-	signal s_HALFSCL_int : std_logic;
+	signal s_HALFSCL_int : std_logic := '0';
 	signal s_OFFSETSCL_int : std_logic;
 	
 	-- TODO: RW_int values should come from port input
 	signal RW_int : std_logic := '0'; -- READ : 1 , WRITE : 0
 
-	signal test_addr : std_logic_vector(7 downto 0) := "11010000"; -- hard coded address of 0x68 w/ 0 for WR
-	signal addr_buf : unsigned(7 downto 0);
-	signal test_data : std_logic_vector(7 downto 0) := "11101011"; -- 
+	signal i_addr : std_logic_vector(7 downto 0) := x"70"; -- hard coded address of 0x70
+    signal i_data : DataArray(0 to 3);
+
+    signal addr_buf : unsigned(7 downto 0);
 	signal data_buf : unsigned(7 downto 0);
+	signal current_byte : std_logic_vector(7 downto 0);
+	signal byte_cnt : integer range 0 to 100;
+	
+	--- TEMP 
+	signal state : std_logic := '1';
+    signal cnt2 : integer range 0 to 200000;
+	--- END TEMP
 
     begin
     
+--    i_data(0) <= "11010111";
+--    i_data(1) <= "11110000";
+--    i_data(2) <= "10100101";
+--    i_data(3) <= "00001111";
 
+    i_data(0) <= x"21";
+    i_data(1) <= x"81"; 
+    i_data(2) <= x"EF"; -- brightness
+    i_data(3) <= x"00"; -- set position
+    
+    
+    --- TEMPORARY
+--    io_SCL <= s_HALFSCL_int;
+--    io_SDA <= '1';
+
+    --- END TEMPORARY
 	-----------------------------------------------------
 	-- Process that creates an offset divided clock
     -----------------------------------------------------
-	OFFSET_CLK : process(i_CLK, i_RESET) -- generates offset 100 kHz 
-	  begin 
-	    if(i_RESET = '0') then
-            halfcount_int <= 0;
-            s_HALFSCL_int <= '0';
-            s_OFFSETSCL_int <= not s_HALFSCL_int;
-	    elsif(rising_edge(i_CLK)) then
-            if(halfcount_int = 10000 - 1) then
-                halfcount_int <= 0;
-                s_OFFSETSCL_int <= s_HALFSCL_int;
-                s_HALFSCL_int <= not s_HALFSCL_int;
-            else 
-                halfcount_int <= halfcount_int + 1;
+--	OFFSET_CLK : process(i_CLK, i_RESET, s_HALFSCL_int) -- generates offset 100 kHz 
+--	  begin 
+--	    if(i_RESET = '0') then
+--            halfcount_int <= 0;
+--            s_HALFSCL_int <= '0';
+--            s_OFFSETSCL_int <= not s_HALFSCL_int;
+--	    elsif(rising_edge(i_CLK)) then
+--            if(halfcount_int = 10000 - 1) then
+--                halfcount_int <= 0;
+--                s_OFFSETSCL_int <= s_HALFSCL_int;
+--                s_HALFSCL_int <= not s_HALFSCL_int;
+--            else 
+--                halfcount_int <= halfcount_int + 1;
+--            end if;
+--	    end if;
+--	end process;
+	
+	PROC2 : process(i_CLK, i_RESET)
+      begin
+--        if(i_RESET = '0') then
+--            cnt2 <= 0;
+--        else
+            if(rising_edge(i_CLK)) then
+                cnt2 <= cnt2 + 1;
+                if(cnt2 = 9999) then
+                    cnt2 <= 0;
+                    
+                    s_HALFSCL_int <= not s_HALFSCL_int;
+                end if;
             end if;
-	    end if;
-	end process;
+--        end if;
+    end process;
 	
 	------------------------------------------------------
 	process(s_HALFSCL_int, i_RESET)
@@ -125,6 +177,7 @@ architecture i2c_module_arch of i2c_module is
                         if ((i_start_flag = '1')) then 
                             next_state <= START;
                         end if;
+                        
                     when START => next_state <= START2;
                     when START2 => next_state <= START3;
                     when START3 => next_state <= ADDR;
@@ -136,7 +189,9 @@ architecture i2c_module_arch of i2c_module is
                     when ADDR6 => next_state <= ADDR7;
                     when ADDR7 => next_state <= RW;
                     when RW => next_state <= ACK1;
-                    when ACK1 => next_state <= DATA1;
+                    when ACK1 => 
+                        byte_cnt <= byte_cnt + 1;
+                        next_state <= DATA1;
                     when DATA1 => next_state <= DATA2;
                     when DATA2 => next_state <= DATA3;
                     when DATA3 => next_state <= DATA4;
@@ -145,7 +200,14 @@ architecture i2c_module_arch of i2c_module is
                     when DATA6 => next_state <= DATA7;
                     when DATA7 => next_state <= DATA8;
                     when DATA8 => next_state <= ACKN;
-                    When ACKN => next_state <= STOP;
+                    When ACKN => 
+                        if (byte_cnt < (i_data'length)) then  -- how multiple bytes are currently handled
+                            byte_cnt <= byte_cnt + 1;
+                            next_state <= DATA1;
+                        else 
+                            byte_cnt <= 0;
+                            next_state <= STOP;
+                        end if;
                     when STOP => next_state <= STOP2;
                     when STOP2 => next_state <= STOP3;
                     when others => 
@@ -170,6 +232,7 @@ architecture i2c_module_arch of i2c_module is
                         if(cycle_cnt = 0) then -- SCL output
                             s_SDA_int <= '0';   -- RESET SDA
                         end if;
+                        current_byte <= i_data(byte_cnt);
                     when START2 => 
                         if(cycle_cnt = 0) then -- SCL output
                             s_SCL_int <= '0';
@@ -180,20 +243,8 @@ architecture i2c_module_arch of i2c_module is
                         end if;
                         if(cycle_cnt = 1) then -- SDA output
                             s_SCL_int <= '0';
-                            s_SDA_int <= test_addr(7);  
-                            addr_buf <= shift_left(unsigned(test_addr), 1); 
-                        end if;
-                    when ADDR | ADDR2 | ADDR3 | ADDR4 | ADDR5 | ADDR6 | ADDR7 | RW => 
-                        if(cycle_cnt = 0) then -- SCL output
-                            s_SCL_int <= not s_SCL_int;   
-                        end if;
-                        if(cycle_cnt = 1) then -- SDA output
-                            s_SCL_int <= not s_SCL_int;
-                            s_SDA_int <= addr_buf(7);
-                            addr_buf <= shift_left(addr_buf, 1);
-                            if(current_state = RW) then
-                                s_SDA_EN <= '0';
-                            end if;
+                            s_SDA_int <= i_addr(7);  
+                            addr_buf <= shift_left(unsigned(i_addr), 1); 
                         end if;
                     when ACK1 => 
                         if(cycle_cnt = 0) then -- SCL output
@@ -203,34 +254,12 @@ architecture i2c_module_arch of i2c_module is
                         if(cycle_cnt = 1) then -- SDA output
                             s_SCL_int <= not s_SCL_int;
                             s_SDA_EN <= '1';
-                            
                             s_SCL_int <= not s_SCL_int;
-                            s_SDA_int <= test_data(7);
-                            data_buf <= shift_left(unsigned(test_data), 1);
                             
-                        end if;
---                    when DATA1 => 
---                        if(cycle_cnt = 0) then -- SCL output
---                            s_SCL_int <= not s_SCL_int; 
---                            s_SDA_EN <= '1';
---                        end if;
---                        if(cycle_cnt = 1) then -- SDA output
---                            s_SCL_int <= not s_SCL_int;
---                            s_SDA_int <= test_data(7);
---                            data_buf <= shift_left(unsigned(test_data), 1);
---                        end if;
-                    when DATA1 | DATA2 | DATA3 | DATA4 | DATA5 | DATA6 | DATA7 | DATA8 =>
-                        if(cycle_cnt = 0) then -- SCL output
-                            s_SCL_int <= not s_SCL_int; 
-                            s_SDA_EN <= '1';
-                            if(current_state = DATA8) then
-                                s_SDA_EN <= '0';
-                            end if;
-                        end if;
-                        if(cycle_cnt = 1) then -- SDA output
-                            s_SCL_int <= not s_SCL_int;
-                            s_SDA_int <= data_buf(7);
-                            data_buf <= shift_left(data_buf, 1);
+                            current_byte <= i_data(byte_cnt);
+                            s_SDA_int <= current_byte(7);
+                            data_buf <= shift_left(unsigned(current_byte), 1);
+                            
                         end if;
                     when ACKN =>
                         if(cycle_cnt = 0) then -- SCL output
@@ -239,15 +268,61 @@ architecture i2c_module_arch of i2c_module is
                         end if;
                         if(cycle_cnt = 1) then -- SDA output
                             s_SCL_int <= not s_SCL_int;
-                        end if;
-                    when STOP => 
-                        if(cycle_cnt = 0) then -- SCL output
-                            s_SCL_int <= not s_SCL_int;
                             s_SDA_EN <= '1';
-                            s_SDA_int <= '0';     -- RESET SDA
+                            
+                            if (byte_cnt < (i_data'length)) then
+--                                current_byte <= i_data(byte_cnt);
+                                s_SDA_int <= current_byte(7);
+                                data_buf <= shift_left(unsigned(current_byte), 1);
+                            end if;
+                        end if;
+                    when ADDR | ADDR2 | ADDR3 | ADDR4 | ADDR5 | ADDR6 | ADDR7 | RW => 
+                        if(cycle_cnt = 0) then -- SCL output
+                            s_SCL_int <= not s_SCL_int;   
                         end if;
                         if(cycle_cnt = 1) then -- SDA output
                             s_SCL_int <= not s_SCL_int;
+                            
+                            if(current_state = RW) then
+--                                s_SDA_int <= 'Z';
+                                s_SDA_EN <= '0';
+                            else 
+                                s_SDA_int <= addr_buf(7);
+                                addr_buf <= shift_left(addr_buf, 1);
+                            end if;
+                        end if;
+                    when DATA1 | DATA2 | DATA3 | DATA4 | DATA5 | DATA6 | DATA7 | DATA8 =>
+                        if(cycle_cnt = 0) then -- SCL output
+                            s_SCL_int <= not s_SCL_int;
+--                            s_SDA_EN <= '1';
+                        end if;
+                        if(cycle_cnt = 1) then -- SDA output
+                            s_SCL_int <= not s_SCL_int;
+                            
+                            if(current_state = DATA8) then
+--                                s_SDA_int <= 'Z';
+                                s_SDA_EN <= '0';
+                                
+                                if (byte_cnt < (i_data'length)) then
+                                    current_byte <= i_data(byte_cnt);
+                                end if;
+                                
+                            else 
+                                s_SDA_int <= data_buf(7);
+                                data_buf <= shift_left(data_buf, 1);
+                            end if;
+                            
+                            
+                        end if;
+                    when STOP => 
+                        if(cycle_cnt = 0) then -- SCL output
+                            --s_SCL_int <= not s_SCL_int;
+                            s_SDA_EN <= '1';
+                            --s_SDA_int <= '0';     -- RESET SDA
+                        end if;
+                        if(cycle_cnt = 1) then -- SDA output
+                            --s_SCL_int <= not s_SCL_int;
+                            s_SDA_int <= '1';
                         end if;
                     when STOP2 => 
                         if(cycle_cnt = 0) then -- SCL output
