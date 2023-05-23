@@ -69,10 +69,10 @@ architecture i2c_module_arch of i2c_module is
 	-- TODO: RW_int values should come from port input
 	signal RW_int : std_logic := '0'; -- READ : 1 , WRITE : 0
 
-	signal i_addr : std_logic_vector(7 downto 0) := x"70"; -- hard coded address of 0x70
+	signal i_addr : std_logic_vector(6 downto 0) := "1110000"; -- hard coded address 
     signal i_data : DataArray(0 to 3);
 
-    signal addr_buf : unsigned(7 downto 0);
+    signal addr_buf : unsigned(6 downto 0);
 	signal data_buf : unsigned(7 downto 0);
 	signal current_byte : std_logic_vector(7 downto 0);
 	signal byte_cnt : integer range 0 to 100;
@@ -230,20 +230,26 @@ architecture i2c_module_arch of i2c_module is
                         end if;
                     when START =>
                         if(cycle_cnt = 0) then -- SCL output
-                            s_SDA_int <= '0';   -- RESET SDA
+                            --s_SDA_int <= '0';   -- RESET SDA
                         end if;
                         current_byte <= i_data(byte_cnt);
                     when START2 => 
                         if(cycle_cnt = 0) then -- SCL output
-                            s_SCL_int <= '0';
+                            --s_SCL_int <= '0';
+                            s_SDA_int <= '0';
+                        end if;
+                        if(cycle_cnt = 1) then
+                            ----s_SDA_int <= '0';
                         end if;
                     when START3 => 
                         if(cycle_cnt = 0) then -- SCL output
-                            s_SCL_int <= not s_SCL_int;   
+                            s_SCL_int <= not s_SCL_int; 
+                              
                         end if;
                         if(cycle_cnt = 1) then -- SDA output
                             s_SCL_int <= '0';
-                            s_SDA_int <= i_addr(7);  
+                            
+                            s_SDA_int <= i_addr(6);  
                             addr_buf <= shift_left(unsigned(i_addr), 1); 
                         end if;
                     when ACK1 => 
@@ -287,7 +293,7 @@ architecture i2c_module_arch of i2c_module is
 --                                s_SDA_int <= 'Z';
                                 s_SDA_EN <= '0';
                             else 
-                                s_SDA_int <= addr_buf(7);
+                                s_SDA_int <= addr_buf(6);
                                 addr_buf <= shift_left(addr_buf, 1);
                             end if;
                         end if;
