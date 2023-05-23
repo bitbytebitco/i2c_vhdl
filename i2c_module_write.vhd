@@ -1,9 +1,9 @@
 ----------------------------------------------------------------------
--- File name   : i2c_module.vhd
+-- File name   : i2c_module_write.vhd
 --
--- Project     : I2C Master module
+-- Project     : I2C Master (Write)
 --
--- Description : I2C Master module 
+-- Description : I2C Master (Write) 
 --
 -- Author(s)   : Zachary Becker
 --               bitbytebitco@gmail.com
@@ -23,20 +23,21 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
-entity i2c_module is
+entity i2c_module_write is
     port(
         i_RESET : in std_logic;				-- Active low reset
         i_CLK : in std_logic;				-- ASSUMING: 100 MHz 
         --i_start_flag : in std_logic;
 --        i_data : in DataArray(0 to 2);
---        i_addr : in std_logic_vector(7 downto 0);
-        io_SCL : inout std_logic;			
-        io_SDA : inout std_logic		
+--        i_addr : in std_logic_vector(6 downto 0);
+        o_SCL : out std_logic;
+        i_SDA : in std_logic;
+        o_SDA : out std_logic	
     );
 end entity;
 
 
-architecture i2c_module_arch of i2c_module is
+architecture i2c_module_arch of i2c_module_write is
     
 	-- Initializations
 	type state_type is (IDLE, START, START2, START3,
@@ -349,7 +350,11 @@ architecture i2c_module_arch of i2c_module is
     end process;
     
     -- Tri-State buffer control
-    io_SCL   <= s_SCL_int when s_SCL_EN = '1' else 'Z';
-    io_SDA   <= s_SDA_int when s_SDA_EN = '1' else 'Z';
+--    io_SCL   <= s_SCL_int when s_SCL_EN = '1' else 'Z';
+--    io_SDA   <= s_SDA_int when s_SDA_EN = '1' else 'Z';
+
+     o_SCL   <= s_SCL_int when s_SCL_EN = '1' else 'Z';
+     o_SDA   <= s_SDA_int when s_SDA_EN = '1' else 'Z';
+
     
 end architecture;
