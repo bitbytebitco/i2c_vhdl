@@ -10,7 +10,7 @@ use IEEE.numeric_std.all;
 entity top is
     port(
         i_CLK : in std_logic;
-        i_RESET : in std_logic;
+        i_reset_n : in std_logic;
         io_SCL : inout std_logic;
         io_SDA : inout std_logic
     );
@@ -39,10 +39,10 @@ architecture archi of top is
         -- I2C component declaration
         component i2c_module_write
             port(
-                i_RESET : in std_logic;				-- Active low reset
+                i_reset_n : in std_logic;				-- Active low reset
                 i_CLK : in std_logic;				-- ASSUMING: 100 MHz 
-                i_start_flag : in std_logic;
-                i_data : in std_logic_vector(7 downto 0);
+                i_en : in std_logic;
+                i_tx_byte : in std_logic_vector(7 downto 0);
                 i_byte_cnt : in std_logic_vector(4 downto 0);
         --        i_addr : in std_logic_vector(6 downto 0);
                 o_buffer_clear : out std_logic;
@@ -53,13 +53,7 @@ architecture archi of top is
         end component;
     
     begin
-        --    i_data(0) <= x"21";
-        --    i_data(1) <= x"81"; 
-        --    i_data(2) <= x"E8"; -- brightness
-        --    i_data(3) <= x"0A"; -- set position
-        --    i_data(4) <= x"77";
-       
-    
+      
         r_data(0) <= x"21";
         r_data(1) <= x"81";
         r_data(2) <= x"E8";
@@ -102,10 +96,10 @@ architecture archi of top is
     
         -- I2C port mapping
         I2C : i2c_module_write port map (
-            i_RESET => i_RESET,
+            i_reset_n => i_reset_n,
             i_CLK => i_CLK,
-            i_start_flag => w_start,
-            i_data => r_current_data,
+            i_en => w_start,
+            i_tx_byte => r_current_data,
             i_byte_cnt => r_byte_cnt,
             o_buffer_clear => w_buffer_clear,
             o_SCL => io_SCL,
@@ -134,9 +128,9 @@ architecture archi of top is
                 end if;
         end process;
         
-        ITER : process(i_RESET, w_buffer_clear)
+        ITER : process(i_reset_n, w_buffer_clear)
             begin
-                if(i_RESET = '0') then
+                if(i_reset_n = '0') then
                     r_byte_cnt <= std_logic_vector(to_unsigned(0, r_byte_cnt'length)); -- no data
                 else
                     if(rising_edge(w_buffer_clear)) then
@@ -182,56 +176,7 @@ architecture archi of top is
                                 end if;
                             end if;
                         end if;
-                    end if;
-                
---                    if(first = 0) then
---                        if(rising_edge(w_buffer_clear)) then
---                            --r_i <= r_i + 1;
---                            delay <= '1';
---                            first <= 1;
---                        end if;
---                    else
---                        if(cnt3 >= 20) then
-                        
---                            if(first < 2) then
---                                delay <= '0';
---                                r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length));
---                                r_current_data <= r_data(1);
---                                r_i3 <= 1;
---                                first <= 2;
-                                
---                            elsif(first = 2) then
---                                if(rising_edge(w_buffer_clear)) then
---                                    r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length));
---                                    r_current_data <= r_data(2);
---                                    first <= 3;
---                                end if;
---                            elsif(first = 3) then
---                                if(rising_edge(w_buffer_clear)) then
---                                    r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length));
---                                    r_current_data <= r_data(3);
---                                    w_start <= '0';
---                                end if;
---                            end if;
-                        
-----                        if(rising_edge(w_buffer_clear)) then
-----                            report "test";
-----                            r_current_data <= r_data(r_i3);
-----                            r_i3 <= r_i3 + 1;
-                            
-----                            if(r_i3 = 19) then
-----                                r_i3 <= 0;
-----                                r_i2 <= 0;
-----                            end if;
-----                        end if;
-                            
---                        end if;
---                    end if;
-                        
-                        
-                        
-                        
-                        
+                    end if;        
                 end if;
 
         end process;
