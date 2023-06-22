@@ -31,10 +31,14 @@ architecture archi of top is
         signal w_buffer_clear : std_logic := '0';
         signal w_start : std_logic := '1';
         signal r1_byte_cnt : std_logic_vector(4 downto 0);
-        signal r_byte_cnt : std_logic_vector(4 downto 0);
+        signal r_byte_cnt : std_logic_vector(7 downto 0);
         signal w_clk : std_logic := '0';
         signal delay : std_logic := '0';
         signal first : integer := 0;
+        signal w_busy : std_logic := '0'; 
+        signal w_done : std_logic := '0';
+        signal w_clear : std_logic := '0';
+        signal w_rindex : integer := 1;
 
         -- I2C component declaration
         component i2c_module_write
@@ -43,9 +47,12 @@ architecture archi of top is
                 i_CLK : in std_logic;				-- ASSUMING: 100 MHz 
                 i_en : in std_logic;
                 i_tx_byte : in std_logic_vector(7 downto 0);
-                i_byte_cnt : in std_logic_vector(4 downto 0);
+                i_byte_cnt : in std_logic_vector(7 downto 0);
         --        i_addr : in std_logic_vector(6 downto 0);
                 o_buffer_clear : out std_logic;
+                i_clear : in std_logic;
+                o_busy : out std_logic;
+                o_done : out std_logic;
                 o_SCL : out std_logic;
                 i_SDA : in std_logic;
                 o_SDA : out std_logic	
@@ -102,6 +109,9 @@ architecture archi of top is
             i_tx_byte => r_current_data,
             i_byte_cnt => r_byte_cnt,
             o_buffer_clear => w_buffer_clear,
+            i_clear => w_clear,
+            o_busy => w_busy,
+            o_done => w_done,
             o_SCL => io_SCL,
             i_SDA => io_SDA,
             o_SDA => io_SDA
@@ -128,55 +138,95 @@ architecture archi of top is
                 end if;
         end process;
         
-        ITER : process(i_reset_n, w_buffer_clear)
+--        process(w_buffer_clear) 
+--            begin
+--                if(first = 5) then
+--                    if(rising_edge(w_buffer_clear)) then
+--                        w_rindex <= w_rindex + 1;
+--                    end if;
+--                end if;
+--        end process;
+        
+        ITER : process(i_reset_n, w_done)
             begin
                 if(i_reset_n = '0') then
                     r_byte_cnt <= std_logic_vector(to_unsigned(0, r_byte_cnt'length)); -- no data
                 else
-                    if(rising_edge(w_buffer_clear)) then
+                    if(rising_edge(w_done)) then
+--                        w_clear <= '1';             -- clear flag to allow module to continue
                         if(first = 0) then
                             r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); -- 0x21
                             r_current_data <= r_data(0);
-                            first <= 1;
+--                            first <= 1;
+                            w_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 1) then
                             if(r_i3 = 0) then
                                 r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length)); -- 0x00 (17 times)
                                 r_current_data <= x"00";
-                                r_i3 <= 1;
+                                r_i3 <= 1;  
+                                w_clear <= '1';             -- clear flag to allow module to continue                              
                             else 
                                 r_current_data <= x"00";
                                 r_i3 <= r_i3 + 1;
                                 if(r_i3 > 16) then
                                     r_i3 <= 0;
                                     r_current_data <= r_data(1); -- 0x81
-                                    first <= 2;
+--                                    first <= 2;
                                 end if;
+                                w_clear <= '1';             -- clear flag to allow module to continue
                             end if;
                         elsif(first = 2) then
                             r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); 
-                            r_current_data <= r_data(2); -- 0xE8
-                            first <= 3;
+                            r_current_data <= r_data(1); -- 0x81
+                            w_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 3) then
-                            if(r_i3 = 0) then
-                                r_byte_cnt <= std_logic_vector(to_unsigned(r1_data'length, r_byte_cnt'length));
-                                --r_current_data <= r1_data(0);
-                                r_current_data <= x"00";
-                                r_i3 <= r_i3 + 1;    
-                            elsif(r_i3 = 3) then 
-                                r_current_data <= x"77";    
-                                r_i3 <= r_i3 + 1;                          
-                            else
-                                --r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
-                                --r_current_data <= r1_data(r_i3 - 1);
-                                r_current_data <= x"00";
-                                r_i3 <= r_i3 + 1;
-                                if(r_i3 > r1_data'length - 2) then
-                                    r_i3 <= 0;
-                                    w_start <= '0';
-                                end if;
-                            end if;
+                            r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); 
+                            r_current_data <= r_data(2); -- 0xE8
+--                            first <= 3;
+                            w_clear <= '1';             -- clear flag to allow module to continue
+                        elsif(first = 4) then    
+                            r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
+                            r_current_data <= x"00";
+                            r_current_data <= r1_data(w_rindex);
+                            w_clear <= '1';             -- clear flag to allow module to continue
+                            
+                        elsif(first = 5) then
+                        
+--                        elsif(first = -1) then
+                        
+--                            if(r_i3 = 0) then
+--                                r_byte_cnt <= std_logic_vector(to_unsigned(r1_data'length, r_byte_cnt'length));
+--                                --r_current_data <= r1_data(0);
+--                                r_current_data <= x"00";
+--                                r_i3 <= r_i3 + 1;    
+--                            elsif(r_i3 = 3) then 
+--                                r_current_data <= x"77";    
+--                                r_i3 <= r_i3 + 1;                          
+--                            else
+--                                --r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
+--                                --r_current_data <= r1_data(r_i3 - 1);
+--                                r_current_data <= x"00";
+--                                r_i3 <= r_i3 + 1;
+--                                if(r_i3 > r1_data'length - 2) then
+--                                    r_i3 <= 0;
+--                                    w_start <= '0';
+--                                end if;
+--                            end if;
                         end if;
-                    end if;        
+                        first <= first + 1;
+                    elsif(rising_edge(w_buffer_clear)) then 
+                        if(first = 5) then
+                            r_current_data <= r1_data(w_rindex);
+                            w_rindex <= w_rindex + 1;
+                        
+                        end if;
+                    end if;
+                    
+                    if(w_done = '0') then 
+                        w_clear <= '0';    
+                    end if;
+
+                            
                 end if;
 
         end process;
