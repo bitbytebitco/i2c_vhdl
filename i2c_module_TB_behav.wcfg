@@ -3,7 +3,7 @@
    <wave_state>
    </wave_state>
    <db_ref_list>
-      <db_ref path="i2c_module_TB_behav.wdb" id="1">
+      <db_ref path="i2c_module_write_TB_behav.wdb" id="1">
          <top_modules>
             <top_module name="i2c_module_write_TB" />
             <top_module name="misc_pkg" />
@@ -12,66 +12,82 @@
    </db_ref_list>
    <zoom_setting>
       <ZoomStartTime time="0.000000000 ms"></ZoomStartTime>
-      <ZoomEndTime time="16.627448455 ms"></ZoomEndTime>
-      <Cursor1Time time="74.412903225 ms"></Cursor1Time>
+      <ZoomEndTime time="53.718693703 ms"></ZoomEndTime>
+      <Cursor1Time time="0.000000000 ms"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
-      <NameColumnWidth column_width="154"></NameColumnWidth>
-      <ValueColumnWidth column_width="98"></ValueColumnWidth>
+      <NameColumnWidth column_width="249"></NameColumnWidth>
+      <ValueColumnWidth column_width="105"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="15" />
-   <wvobject fp_name="/i2c_module_write_TB/DUT/io_SCL" type="logic">
+   <WVObjectSize size="19" />
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/io_SCL">
       <obj_property name="ElementShortName">io_SCL</obj_property>
       <obj_property name="ObjectShortName">io_SCL</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/io_SDA" type="logic">
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/io_SDA">
       <obj_property name="ElementShortName">io_SDA</obj_property>
       <obj_property name="ObjectShortName">io_SDA</obj_property>
    </wvobject>
-   <wvobject type="divider" fp_name="divider29">
+   <wvobject fp_name="divider29" type="divider">
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/s_HALFSCL_int" type="logic">
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/s_HALFSCL_int">
       <obj_property name="ElementShortName">s_HALFSCL_int</obj_property>
       <obj_property name="ObjectShortName">s_HALFSCL_int</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/cycle_cnt" type="other">
+   <wvobject type="other" fp_name="/i2c_module_write_TB/DUT/I2C/cycle_cnt">
       <obj_property name="ElementShortName">cycle_cnt</obj_property>
       <obj_property name="ObjectShortName">cycle_cnt</obj_property>
    </wvobject>
-   <wvobject type="divider" fp_name="divider9">
+   <wvobject fp_name="divider9" type="divider">
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/current_state" type="other">
+   <wvobject type="other" fp_name="/i2c_module_write_TB/DUT/I2C/current_state">
       <obj_property name="ElementShortName">current_state</obj_property>
       <obj_property name="ObjectShortName">current_state</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/next_state" type="other">
+   <wvobject type="other" fp_name="/i2c_module_write_TB/DUT/I2C/next_state">
       <obj_property name="ElementShortName">next_state</obj_property>
       <obj_property name="ObjectShortName">next_state</obj_property>
    </wvobject>
-   <wvobject type="divider" fp_name="divider10">
+   <wvobject fp_name="divider10" type="divider">
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/s_SCL_EN" type="logic">
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/s_SCL_EN">
       <obj_property name="ElementShortName">s_SCL_EN</obj_property>
       <obj_property name="ObjectShortName">s_SCL_EN</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/s_SDA_EN" type="logic">
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/s_SDA_EN">
       <obj_property name="ElementShortName">s_SDA_EN</obj_property>
       <obj_property name="ObjectShortName">s_SDA_EN</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/s_SCL_int" type="logic">
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/s_SCL_int">
       <obj_property name="ElementShortName">s_SCL_int</obj_property>
       <obj_property name="ObjectShortName">s_SCL_int</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/s_SDA_int" type="logic">
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/s_SDA_int">
       <obj_property name="ElementShortName">s_SDA_int</obj_property>
       <obj_property name="ObjectShortName">s_SDA_int</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/byte_cnt" type="other">
+   <wvobject type="other" fp_name="/i2c_module_write_TB/DUT/I2C/byte_cnt">
       <obj_property name="ElementShortName">byte_cnt</obj_property>
       <obj_property name="ObjectShortName">byte_cnt</obj_property>
    </wvobject>
-   <wvobject fp_name="/i2c_module_write_TB/DUT/I2C/current_byte" type="array">
+   <wvobject type="array" fp_name="/i2c_module_write_TB/DUT/I2C/current_byte">
       <obj_property name="ElementShortName">current_byte[7:0]</obj_property>
       <obj_property name="ObjectShortName">current_byte[7:0]</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/o_busy">
+      <obj_property name="ElementShortName">o_busy</obj_property>
+      <obj_property name="ObjectShortName">o_busy</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/o_done">
+      <obj_property name="ElementShortName">o_done</obj_property>
+      <obj_property name="ObjectShortName">o_done</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/i2c_module_write_TB/DUT/I2C/i_clear">
+      <obj_property name="ElementShortName">i_clear</obj_property>
+      <obj_property name="ObjectShortName">i_clear</obj_property>
+   </wvobject>
+   <wvobject type="other" fp_name="/i2c_module_write_TB/DUT/first">
+      <obj_property name="ElementShortName">first</obj_property>
+      <obj_property name="ObjectShortName">first</obj_property>
    </wvobject>
 </wave_config>
