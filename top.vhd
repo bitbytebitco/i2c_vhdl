@@ -38,7 +38,7 @@ architecture archi of top is
         signal w_busy : std_logic := '0'; 
         signal w_done : std_logic := '0';
         signal w_clear : std_logic := '0';
-        signal w_rindex : integer := 1;
+        signal w_rindex : integer := 0;
 
         -- I2C component declaration
         component i2c_module_write
@@ -138,87 +138,56 @@ architecture archi of top is
                 end if;
         end process;
         
---        process(w_buffer_clear) 
---            begin
---                if(first = 5) then
---                    if(rising_edge(w_buffer_clear)) then
---                        w_rindex <= w_rindex + 1;
---                    end if;
---                end if;
---        end process;
         
-        ITER : process(i_reset_n, w_done)
+        ITER : process(i_reset_n, w_done, w_buffer_clear)
             begin
                 if(i_reset_n = '0') then
                     r_byte_cnt <= std_logic_vector(to_unsigned(0, r_byte_cnt'length)); -- no data
                 else
                     if(rising_edge(w_done)) then
---                        w_clear <= '1';             -- clear flag to allow module to continue
+
                         if(first = 0) then
-                            r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); -- 0x21
-                            r_current_data <= r_data(0);
---                            first <= 1;
+                            r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); 
+--                            r_current_data <= r_data(0); -- 0x21
                             w_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 1) then
-                            if(r_i3 = 0) then
-                                r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length)); -- 0x00 (17 times)
-                                r_current_data <= x"00";
-                                r_i3 <= 1;  
-                                w_clear <= '1';             -- clear flag to allow module to continue                              
-                            else 
-                                r_current_data <= x"00";
-                                r_i3 <= r_i3 + 1;
-                                if(r_i3 > 16) then
-                                    r_i3 <= 0;
-                                    r_current_data <= r_data(1); -- 0x81
---                                    first <= 2;
-                                end if;
-                                w_clear <= '1';             -- clear flag to allow module to continue
-                            end if;
+                            r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
+--                            r_current_data <= x"00"; 
+                            w_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 2) then
                             r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); 
-                            r_current_data <= r_data(1); -- 0x81
+--                            r_current_data <= r_data(1); -- 0x81
                             w_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 3) then
-                            r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); 
-                            r_current_data <= r_data(2); -- 0xE8
---                            first <= 3;
+                            r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length));
+--                            r_current_data <= r_data(2); -- 0xE8
                             w_clear <= '1';             -- clear flag to allow module to continue
-                        elsif(first = 4) then    
+                        elsif(first = 4) then   
                             r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
-                            r_current_data <= x"00";
-                            r_current_data <= r1_data(w_rindex);
+--                            r_current_data <= x"00";
                             w_clear <= '1';             -- clear flag to allow module to continue
-                            
-                        elsif(first = 5) then
-                        
---                        elsif(first = -1) then
-                        
---                            if(r_i3 = 0) then
---                                r_byte_cnt <= std_logic_vector(to_unsigned(r1_data'length, r_byte_cnt'length));
---                                --r_current_data <= r1_data(0);
---                                r_current_data <= x"00";
---                                r_i3 <= r_i3 + 1;    
---                            elsif(r_i3 = 3) then 
---                                r_current_data <= x"77";    
---                                r_i3 <= r_i3 + 1;                          
---                            else
---                                --r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
---                                --r_current_data <= r1_data(r_i3 - 1);
---                                r_current_data <= x"00";
---                                r_i3 <= r_i3 + 1;
---                                if(r_i3 > r1_data'length - 2) then
---                                    r_i3 <= 0;
---                                    w_start <= '0';
---                                end if;
---                            end if;
                         end if;
+                        
                         first <= first + 1;
-                    elsif(rising_edge(w_buffer_clear)) then 
-                        if(first = 5) then
+                        
+                    end if;
+                    
+                    if(rising_edge(w_buffer_clear)) then 
+                        if(first = 0) then
+                            r_current_data <= r_data(0); -- 0x21
+                        elsif(first = 1) then
+                            r_current_data <= x"00";
+                        elsif(first = 2) then
+                            if(r_byte_cnt = "00010001") then
+                                r_current_data <= r_data(1); -- 0x81
+                            end if;
+                        elsif(first = 3) then
+                            r_current_data <= r_data(2); -- 0xE8
+                        elsif(first = 4) then   
+                            r_current_data <= x"00";
+                        elsif(first = 5) then
                             r_current_data <= r1_data(w_rindex);
                             w_rindex <= w_rindex + 1;
-                        
                         end if;
                     end if;
                     
