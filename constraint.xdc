@@ -13,9 +13,9 @@ set_property PULLUP TRUE [get_ports io_SDA]
 
 
 ## Switch R15
-set_property PACKAGE_PIN R2 [get_ports i_RESET]
-set_property IOSTANDARD LVCMOS33 [get_ports i_RESET]
-set_property PULLUP TRUE [get_ports i_RESET]
+set_property PACKAGE_PIN R2 [get_ports i_reset_n]
+set_property IOSTANDARD LVCMOS33 [get_ports i_reset_n]
+set_property PULLUP TRUE [get_ports i_reset_n]
 
 ## Configuration options, can be used for all designs
 set_property CONFIG_VOLTAGE 3.3 [current_design]
