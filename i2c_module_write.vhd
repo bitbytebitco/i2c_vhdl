@@ -263,7 +263,7 @@ architecture i2c_module_write_arch of i2c_module_write is
                         if(cycle_cnt = 0) then -- SCL output
                             s_SCL_int <= not s_SCL_int;
                             s_SDA_EN <= '1';
-                            o_buffer_clear <= '1';     -- set `done`
+--                            o_buffer_clear <= '1';     -- set `done`
                             
                         end if;
                         if(cycle_cnt = 1) then -- SDA output
@@ -306,10 +306,10 @@ architecture i2c_module_write_arch of i2c_module_write is
                                 s_SDA_EN <= '0';
                                 
                                 if (byte_cnt < total_bytes)  then
-                                    o_buffer_clear <= '1';     -- set `done`
-                                    
+--                                    o_buffer_clear <= '1';     -- set `done`
                                     current_byte <= i_tx_byte;
                                 end if;
+                                o_buffer_clear <= '1';     -- set `done`
                                 
                             else 
                                 s_SDA_int <= data_buf(7);
