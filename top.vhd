@@ -29,6 +29,7 @@ architecture archi of top is
         signal cnt3 : integer := 0;
         signal r_current_data : std_logic_vector(7 downto 0);
         signal w_buffer_clear : std_logic := '0';
+        signal w_i_buffer_clear : std_logic := '0';
         signal w_start : std_logic := '1';
         signal r1_byte_cnt : std_logic_vector(4 downto 0);
         signal r_byte_cnt : std_logic_vector(7 downto 0);
@@ -37,7 +38,7 @@ architecture archi of top is
         signal first : integer := 0;
         signal w_busy : std_logic := '0'; 
         signal w_done : std_logic := '0';
-        signal w_clear : std_logic := '0';
+        signal w_done_clear : std_logic := '0';
         signal w_rindex : integer := 0;
 
         -- I2C component declaration
@@ -50,7 +51,8 @@ architecture archi of top is
                 i_byte_cnt : in std_logic_vector(7 downto 0);
         --        i_addr : in std_logic_vector(6 downto 0);
                 o_buffer_clear : out std_logic;
-                i_clear : in std_logic;
+                i_done_clear : in std_logic;
+                i_buffer_clear : in std_logic;
                 o_busy : out std_logic;
                 o_done : out std_logic;
                 o_SCL : out std_logic;
@@ -82,8 +84,8 @@ architecture archi of top is
         r_data(18) <= x"00";
         r_data(19) <= x"00";
         
-        r1_data(0) <= x"00";
-        r1_data(1) <= x"77";
+        r1_data(0) <= x"77";
+        r1_data(1) <= x"00";
         r1_data(2) <= x"00";
         r1_data(3) <= x"00";
         r1_data(4) <= x"00";
@@ -109,7 +111,8 @@ architecture archi of top is
             i_tx_byte => r_current_data,
             i_byte_cnt => r_byte_cnt,
             o_buffer_clear => w_buffer_clear,
-            i_clear => w_clear,
+            i_done_clear => w_done_clear,
+            i_buffer_clear => w_i_buffer_clear,
             o_busy => w_busy,
             o_done => w_done,
             o_SCL => io_SCL,
@@ -149,32 +152,33 @@ architecture archi of top is
                         if(first = 0) then
                             r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); 
 --                            r_current_data <= r_data(0); -- 0x21
-                            w_clear <= '1';             -- clear flag to allow module to continue
+                            w_done_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 1) then
                             r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
 --                            r_current_data <= x"00"; 
-                            w_clear <= '1';             -- clear flag to allow module to continue
+                            w_done_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 2) then
                             r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length)); 
 --                            r_current_data <= r_data(1); -- 0x81
-                            w_clear <= '1';             -- clear flag to allow module to continue
+                            w_done_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 3) then
                             r_byte_cnt <= std_logic_vector(to_unsigned(1, r_byte_cnt'length));
 --                            r_current_data <= r_data(2); -- 0xE8
-                            w_clear <= '1';             -- clear flag to allow module to continue
+                            w_done_clear <= '1';             -- clear flag to allow module to continue
                         elsif(first = 4) then   
                             r_byte_cnt <= std_logic_vector(to_unsigned(17, r_byte_cnt'length));
 --                            r_current_data <= x"00";
-                            w_clear <= '1';             -- clear flag to allow module to continue
+                            w_done_clear <= '1';             -- clear flag to allow module to continue
+                            
                         end if;
                         
                         first <= first + 1;
                         
                     end if;
                     
-                    if(rising_edge(w_buffer_clear)) then 
+                    if(rising_edge(w_buffer_clear)) then  -- when o_buffer_clear goes HI
                         if(first = 0) then
-                            r_current_data <= r_data(0); -- 0x21
+                            r_current_data <= r_data(0); -- 
                         elsif(first = 1) then
                             r_current_data <= x"00";
                         elsif(first = 2) then
@@ -184,17 +188,26 @@ architecture archi of top is
                         elsif(first = 3) then
                             r_current_data <= r_data(2); -- 0xE8
                         elsif(first = 4) then   
+--                            r_current_data <= r1_data(w_rindex);
+--                            w_rindex <= w_rindex + 1;
                             r_current_data <= x"00";
                         elsif(first = 5) then
-                            r_current_data <= r1_data(w_rindex);
+                            if(w_rindex <= 16) then
+                                r_current_data <= r1_data(w_rindex);
+                            end if;
                             w_rindex <= w_rindex + 1;
                         end if;
+                        w_i_buffer_clear <= '1'; -- set i_buffer_clear HIGH to respond for buffer clear handshake
                     end if;
                     
-                    if(w_done = '0') then 
-                        w_clear <= '0';    
+                    if(w_done = '0') then
+                        w_done_clear <= '0';
                     end if;
-
+                    
+                    if(w_buffer_clear = '0') then 
+                        w_i_buffer_clear <= '0';
+                    end if;
+                                                 
                             
                 end if;
 
