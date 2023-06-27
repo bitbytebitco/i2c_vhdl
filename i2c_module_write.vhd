@@ -34,7 +34,8 @@ entity i2c_module_write is
         i_byte_cnt : in std_logic_vector(7 downto 0);
 --        i_addr : in std_logic_vector(6 downto 0);
         o_buffer_clear : out std_logic; -- ( done = 1, active = 0 )
-        i_clear : in std_logic;
+        i_done_clear : in std_logic;
+        i_buffer_clear : in std_logic; 
         o_busy : out std_logic;
         o_done : out std_logic;
         o_SCL : out std_logic;
@@ -53,7 +54,7 @@ architecture i2c_module_write_arch of i2c_module_write is
 	                    ADDR, ADDR2, ADDR3, ADDR4, ADDR5, ADDR6, ADDR7,
 	                    RW, ACK1, 
 	                    DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8,
-	                    ACKN, STOP, STOP2, STOP3, WAIT_CLEAR);
+	                    ACKN, STOP, STOP2, STOP3, WAIT_CLEAR, WAIT_BUF_CLEAR);
 	                    
 	signal current_state, next_state : state_type;
 	signal halfcount_int : integer range 0 to 100000 := 0;
@@ -98,7 +99,7 @@ architecture i2c_module_write_arch of i2c_module_write is
             cnt2 <= cnt2 + 1;
             if(cnt2 = (clock_divider_int-1) ) then
                 cnt2 <= 0;
-                
+               
                 s_HALFSCL_int <= not s_HALFSCL_int;
             end if;
         end if;
@@ -175,12 +176,20 @@ architecture i2c_module_write_arch of i2c_module_write is
                     when DATA7 => next_state <= DATA8;
                     when DATA8 => next_state <= ACKN;
                     When ACKN => 
-                        if (byte_cnt < total_bytes) then  -- how multiple bytes are currently handled
+                        if(i_buffer_clear = '1') then
+                            if (byte_cnt < total_bytes) then  -- how multiple bytes are currently handled
+                                byte_cnt <= byte_cnt + 1;
+                                next_state <= DATA1;
+    --                            next_state <= WAIT_BUF_CLEAR;
+                            else 
+                                byte_cnt <= 0;
+                                next_state <= STOP;
+                            end if;
+                        end if;
+                    when WAIT_BUF_CLEAR => 
+                        if(i_buffer_clear = '1') then 
                             byte_cnt <= byte_cnt + 1;
                             next_state <= DATA1;
-                        else 
-                            byte_cnt <= 0;
-                            next_state <= STOP;
                         end if;
                     when STOP => next_state <= STOP2;
                     when STOP2 => next_state <= STOP3;
@@ -188,7 +197,7 @@ architecture i2c_module_write_arch of i2c_module_write is
                         next_state <= WAIT_CLEAR;
                         o_done <= '1';
                     when WAIT_CLEAR => 
-                        if(i_clear = '1') then 
+                        if(i_done_clear = '1') then 
                             o_done <= '0';
                             next_state <= IDLE;
                         end if;
@@ -202,6 +211,10 @@ architecture i2c_module_write_arch of i2c_module_write is
     ----------------------------------------------------- 
     OUTPUT_LOGIC_SDA : process(s_HALFSCL_int, cycle_cnt, current_state, next_state)
         begin
+--            if(rising_edge(i_buffer_clear)) then
+--                o_buffer_clear <= '0';
+--            end if;
+        
             if(rising_edge(s_HALFSCL_int)) then -- SCL output
                 case(current_state) is 
                     when IDLE => 
@@ -240,6 +253,11 @@ architecture i2c_module_write_arch of i2c_module_write is
                             addr_buf <= shift_left(unsigned(i_addr), 1); 
                         end if;
                     when ACK1 => 
+                        o_buffer_clear <= '1';     -- set `done`
+                        if(i_buffer_clear = '1') then
+                            o_buffer_clear <= '0';     -- set `done`
+                        end if;
+                        
                         if(cycle_cnt = 0) then -- SCL output
                             s_SCL_int <= not s_SCL_int;
                             s_SDA_EN <= '1';
@@ -249,17 +267,26 @@ architecture i2c_module_write_arch of i2c_module_write is
                             s_SDA_EN <= '1';
                             s_SCL_int <= not s_SCL_int;
                             
-                            if(total_bytes=0) then
-                                o_buffer_clear <= '1';     -- set `done`
-                                
-                            end if;
+--                            if(total_bytes=0) then
+--                                o_buffer_clear <= '1';     -- set `done`
+--                            else 
+--                                o_buffer_clear <= '1';     -- set `done`
+--                            end if;
                             
-                            current_byte <= i_tx_byte;
-                            s_SDA_int <= current_byte(7);
-                            data_buf <= shift_left(unsigned(current_byte), 1);
+--                            current_byte <= i_tx_byte;
+--                            s_SDA_int <= current_byte(7);
+--                            data_buf <= shift_left(unsigned(current_byte), 1);
                             
                         end if;
+                        
+                        current_byte <= i_tx_byte;
+                        s_SDA_int <= current_byte(7);
+                        data_buf <= shift_left(unsigned(current_byte), 1);
+                        
                     when ACKN =>
+                        if(i_buffer_clear = '1') then
+                            o_buffer_clear <= '0';     -- set `done`
+                        end if;
                         if(cycle_cnt = 0) then -- SCL output
                             s_SCL_int <= not s_SCL_int;
                             s_SDA_EN <= '1';
@@ -271,13 +298,14 @@ architecture i2c_module_write_arch of i2c_module_write is
                             s_SDA_EN <= '1';
                             
                             if (byte_cnt < total_bytes) then
-                                o_buffer_clear <= '0';     -- reset
+                                --o_buffer_clear <= '0';     -- reset OLD
                                 
                                 current_byte <= i_tx_byte;
                                 s_SDA_int <= current_byte(7);
                                 data_buf <= shift_left(unsigned(current_byte), 1);
                             end if;
                         end if;
+
                     when ADDR | ADDR2 | ADDR3 | ADDR4 | ADDR5 | ADDR6 | ADDR7 | RW => 
                         if(cycle_cnt = 0) then -- SCL output
                             s_SCL_int <= not s_SCL_int;   
@@ -294,6 +322,10 @@ architecture i2c_module_write_arch of i2c_module_write is
                             end if;
                         end if;
                     when DATA1 | DATA2 | DATA3 | DATA4 | DATA5 | DATA6 | DATA7 | DATA8 =>
+                        if(current_state = DATA1) then
+                            --o_buffer_clear <= '0';     -- reset OLD
+                        end if;
+                        
                         if(cycle_cnt = 0) then -- SCL output
                             s_SCL_int <= not s_SCL_int;
 --                            s_SDA_EN <= '1';
@@ -306,7 +338,6 @@ architecture i2c_module_write_arch of i2c_module_write is
                                 s_SDA_EN <= '0';
                                 
                                 if (byte_cnt < total_bytes)  then
---                                    o_buffer_clear <= '1';     -- set `done`
                                     current_byte <= i_tx_byte;
                                 end if;
                                 o_buffer_clear <= '1';     -- set `done`
