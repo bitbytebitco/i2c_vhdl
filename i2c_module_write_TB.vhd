@@ -48,6 +48,7 @@ architecture i2c_module_write_TB_arch of i2c_module_write_TB is
     signal r_current_data : std_logic_vector(7 downto 0);
     signal w_buffer_clear : std_logic := '0';
     signal w_start : std_logic := '0';
+    signal w_mode : std_logic := '0'; -- '0': READ, '1': WRITE
     signal r1_byte_cnt : std_logic_vector(4 downto 0);
     signal r_byte_cnt : std_logic_vector(7 downto 0);
     signal w_clk : std_logic := '0';
@@ -64,7 +65,7 @@ architecture i2c_module_write_TB_arch of i2c_module_write_TB is
     signal tb_SDA   : std_logic := 'H';  -- testbench slave drives this
     signal io_SDA   : std_logic;         -- resolved bus 
 
-    signal o_state_slv  : std_logic_vector(4 downto 0);          
+    signal o_state_slv  : std_logic_vector(5 downto 0);          
 
     begin
     
@@ -76,6 +77,7 @@ architecture i2c_module_write_TB_arch of i2c_module_write_TB is
 	DUT : entity work.i2c_module_write port map(
 	    i_reset_n => i_reset_n,
         i_CLK => s_CLK_TB,
+        i_mode => w_mode,
         i_en => w_start,
         i_addr => "1101000", 
         i_tx_byte => r_current_data,
@@ -108,41 +110,64 @@ architecture i2c_module_write_TB_arch of i2c_module_write_TB is
 		s_CLK_TB <= '0'; wait for 0.5*t_clk_per;
 	end process; 
 	------------------------------------------------------------------
+    --ACK : process
+    --begin
+    --    tb_SDA <= 'H';
+    --    
+    --    -- wait until we're in the RW state
+    --    wait until (o_state_slv = "001100");  -- RW = 11 = 0b
+    --    -- pull low before SCL rises for ACK sample
+    --    tb_SDA <= '0';
+    --    -- hold through SCL high (master samples here)
+    --    wait until rising_edge(io_SCL);
+    --    wait until falling_edge(io_SCL);
+    --    -- release
+    --    tb_SDA <= 'H';
+
+    --    -- ACKN - loop for however many data bytes
+    --    loop
+    --       wait until (o_state_slv = "010101" or
+    --            o_state_slv = "010110");
+    --            
+    --        if(o_state_slv = "010110") then  -- STOP
+    --            exit;
+    --        end if;
+    --        
+    --        -- we're at phase 0 of ACKN, pull low immediately
+    --        tb_SDA <= '0';
+    --        
+    --        -- hold through phase 1 (SCL rises) and phase 2 (sample point)
+    --        wait until rising_edge(io_SCL);
+    --        wait until falling_edge(io_SCL);
+    --        
+    --        -- release at phase 2->3, after sampling
+    --        tb_SDA <= 'H'; 
+    --    end loop; 
+    --    
+    --end process; 
+
     ACK : process
     begin
         tb_SDA <= 'H';
         
-        -- wait until we're in the RW state
-        wait until (o_state_slv = "01100");  -- RW = 11 = 0b
-        -- pull low before SCL rises for ACK sample
-        tb_SDA <= '0';
-        -- hold through SCL high (master samples here)
-        wait until rising_edge(io_SCL);
-        wait until falling_edge(io_SCL);
-        -- release
-        tb_SDA <= 'H';
-
-        -- ACKN - loop for however many data bytes
         loop
-           wait until (o_state_slv = "10101" or
-                o_state_slv = "10110");
-                
-            if(o_state_slv = "10110") then  -- STOP
+            -- wait for any ACK state (ACK1 or ACKN) or STOP
+            wait until (o_state_slv = "001100" or   -- ACK1 (address ACK, happens twice)
+                        o_state_slv = "010101" or    -- ACKN (data ACK)
+                        o_state_slv = "010110");      -- STOP
+            
+            if(o_state_slv = "010110") then  -- STOP, done
                 exit;
             end if;
             
-            -- we're at phase 0 of ACKN, pull low immediately
+            -- pull low for the ACK
             tb_SDA <= '0';
-            
-            -- hold through phase 1 (SCL rises) and phase 2 (sample point)
             wait until rising_edge(io_SCL);
             wait until falling_edge(io_SCL);
-            
-            -- release at phase 2->3, after sampling
-            tb_SDA <= 'H'; 
-        end loop; 
+            tb_SDA <= 'H';
+        end loop;
         
-    end process; 
+    end process;
 	------------------------------------------------------------------
 	START_STIM : process
 	    begin

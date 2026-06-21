@@ -32,6 +32,7 @@ entity i2c_module_write is
     port(
         i_reset_n : in std_logic;				-- Active low reset
         i_CLK : in std_logic;				
+        i_mode : in std_logic;
         i_en : in std_logic;
         i_addr : in std_logic_vector(6 downto 0);
         i_tx_byte : in std_logic_vector(7 downto 0);
@@ -45,7 +46,7 @@ entity i2c_module_write is
         o_SDA : out std_logic;	
         o_phase_cnt : out std_logic_vector(1 downto 0);
         o_clkdivcnt : out std_logic_vector(7 downto 0);
-        o_state_slv : out std_logic_vector(4 downto 0);
+        o_state_slv : out std_logic_vector(5 downto 0);
         o_addr_buf : out std_logic_vector(6 downto 0)
     );
 end entity;
@@ -68,15 +69,16 @@ architecture i2c_module_write_arch of i2c_module_write is
     
     
 	-- Initializations
-	type state_type is (IDLE, START, START2, START3,
+	type state_type is (IDLE, START, START2, RSTART1, RSTART2,
 	                    ADDR, ADDR2, ADDR3, ADDR4, ADDR5, ADDR6, ADDR7,
 	                    RW, ACK1, 
 	                    DATA1, DATA2, DATA3, DATA4, DATA5, DATA6, DATA7, DATA8,
-	                    ACKN, STOP, STOP2, STOP3, WAIT_CLEAR, WAIT_BUF_CLEAR);
+	                    RDATA1, RDATA2, RDATA3, RDATA4, RDATA5, RDATA6, RDATA7, RDATA8,
+	                    ACKN, MNACK, STOP, WAIT_CLEAR, WAIT_BUF_CLEAR);
 	                    
 	signal current_state : state_type := IDLE;
 	signal next_state : state_type := START;
-    signal state_slv : std_logic_vector(4 downto 0);
+    signal state_slv : std_logic_vector(5 downto 0);
 
 	signal halfcount_int : integer range 0 to 100000 := 0;
 	signal delay_count : integer range 0 to 1000000 := 0;
@@ -87,15 +89,17 @@ architecture i2c_module_write_arch of i2c_module_write is
 	signal s_SCL_int : std_logic := '1';
 	signal s_SDA_int : std_logic := '1'; 
 	signal s_SDA_EN : std_logic := '1';
-	signal s_SCL_EN : std_logic;
+	signal s_SCL_EN : std_logic := '0';
 
     signal s_ACK_ok : std_logic := '0'; -- for sampling ACK
 	
-	-- TODO: RW_int values should come from port input
-	signal RW_int : std_logic := '0'; -- READ : 1 , WRITE : 0
+	signal w_mode : std_logic := '0'; -- READ : 1, WRITE : 0
+    signal w_rwbit: std_logic := '0'; -- READ : 1, WRITE : 0 -- for use in setting RW after write ADDR (which uses RW = 0 to write)
+        
 --	signal i_addr : std_logic_vector(6 downto 0) := "1110000"; -- hard coded address 
     signal addr_buf : unsigned(6 downto 0);
 	signal data_buf : unsigned(7 downto 0);
+	signal rx_buf : unsigned(7 downto 0);
 	signal current_byte : std_logic_vector(7 downto 0);
 	signal byte_cnt : integer range 0 to 100 := 0;
 	signal total_bytes : integer range 0 to 100;
@@ -157,7 +161,7 @@ architecture i2c_module_write_arch of i2c_module_write is
 
     -----------------------------------------------------    
     --NEXT_STATE_LOGIC: process(i_en, s_ACK_ok, total_bytes, byte_cnt, i_reset_n, i_done_clear, phase_cnt, current_state, clk_div_cnt, delay_count)
-    NEXT_STATE_LOGIC: process(current_state, byte_cnt, total_bytes, s_ACK_ok)
+    NEXT_STATE_LOGIC: process(current_state, byte_cnt, total_bytes, s_ACK_ok, w_mode)
         begin
 
             -- DEFAULT: stay in current state
@@ -175,8 +179,12 @@ architecture i2c_module_write_arch of i2c_module_write is
                         --else 
                         --    next_state <= IDLE;
                         --end if;
+
+                        w_mode <= i_mode;
                         next_state <= START;
                         
+                    when RSTART1 => next_state <= RSTART2;
+                    when RSTART2 => next_state <= ADDR;
                     when START => 
                         next_state <= START2;
                     when START2 => next_state <= ADDR;
@@ -187,17 +195,30 @@ architecture i2c_module_write_arch of i2c_module_write is
                     when ADDR5 => next_state <= ADDR6;
                     when ADDR6 => next_state <= ADDR7;
                     when ADDR7 => next_state <= RW; 
-                    when RW => next_state <= ACK1;
-                    when ACK1 =>
-                        --if(clk_div_cnt = 0) then
-                        --    next_state <= IDLE;
+                    when RW => 
+                        next_state <= ACK1;
+                        --if(w_rwbit = '1') then
+                        --    next_state <= RACK;
+                        --else 
+                        --    next_state <= ACK1;
                         --end if;
-                        --if((total_bytes>0) and (s_ACK_ok = '1')) then -- real one
-                        if((total_bytes>0) and (s_ACK_ok = '1')) then -- testing w/o actual ACK
-                            next_state <= DATA1;
-                        else 
-                            next_state <= STOP;
+                    when ACK1 =>
+                        if(w_rwbit = '0') then -- if WRITE
+                            if((total_bytes>0) and (s_ACK_ok = '1')) then 
+                                next_state <= DATA1;
+                            else 
+                                next_state <= STOP; 
+                            end if;
+                        else -- if READ
+                            if(s_ACK_ok = '1') then -- real one
+                            --if(s_ACK_ok = '0') then -- testing
+                                next_state <= RDATA1;
+                            else 
+                                next_state <= STOP; 
+                            end if;
                         end if;
+
+                    -- WRITE DATA BITS
                     when DATA1 => next_state <= DATA2;
                     when DATA2 => next_state <= DATA3;
                     when DATA3 => next_state <= DATA4;
@@ -206,13 +227,29 @@ architecture i2c_module_write_arch of i2c_module_write is
                     when DATA6 => next_state <= DATA7;
                     when DATA7 => next_state <= DATA8;
                     when DATA8 => next_state <= ACKN;
+
+                    -- READ DATA BITS  
+                    when RDATA1 => next_state <= RDATA2;
+                    when RDATA2 => next_state <= RDATA3;
+                    when RDATA3 => next_state <= RDATA4;
+                    when RDATA4 => next_state <= RDATA5;
+                    when RDATA5 => next_state <= RDATA6;
+                    when RDATA6 => next_state <= RDATA7;
+                    when RDATA7 => next_state <= RDATA8;
+                    when RDATA8 => next_state <= MNACK;
+                    when MNACK  => next_state <= STOP;
+
                     When ACKN => 
                             --next_state <= STOP;
                         if (byte_cnt < total_bytes) then  -- how multiple bytes are currently handled
-
-                            next_state <= DATA1;
+                            if(w_mode = '1') then -- if WRITE
+                                next_state <= DATA1;
+                            else -- if READ 
+                                next_state <= RSTART1;
+                            end if;
                         else 
-                            next_state <= STOP;
+                            --next_state <= STOP; -- real
+                            next_state <= RSTART1; -- testing
                         end if;
                     when WAIT_BUF_CLEAR => 
                         next_state <= DATA1;
@@ -238,7 +275,7 @@ architecture i2c_module_write_arch of i2c_module_write is
         begin
                   
             if(i_reset_n = '0') then
-                s_SCL_int <= '0';
+                s_SCL_int <= '1';
                 s_SDA_int <= '1'; 
                 s_SDA_EN <= '1';
                 byte_cnt <= 0;
@@ -288,46 +325,95 @@ architecture i2c_module_write_arch of i2c_module_write is
                             --s_SDA_int <= i_addr(6);  
                             s_SCL_int <= '0';  
                             addr_buf <= unsigned(i_addr); 
-                            s_SDA_int <= i_addr(6);
-                            s_SDA_EN <= '1';
+                            s_sda_int <= i_addr(6);
+                            s_sda_en <= '1';
+
+                            -- RW bit to '0' for WRITE
+                            w_rwbit <= '0';  
                         end if;
 
+                    when RSTART1 =>
+                        if(phase_cnt = 0) then 
+                            s_SDA_EN <='1';
+                            s_SCL_int <= '0';
+                            s_SDA_int <= '1';
+                            
+                            s_ACK_ok <= '0';
+                        end if;
+                        if(phase_cnt = 1) then 
+                            s_SCL_int <= '1';
+                        end if;
+                        if(phase_cnt = 2) then 
+                            --s_SCL_int <= '0';
+                            s_SCL_int <= '1';
+                            s_SDA_int <= '0';
+                        end if;
+                        if(phase_cnt = 3) then 
+                            s_SCL_int <= '0';
+                            addr_buf <= unsigned(i_addr); 
 
+                            -- set R/W bit to READ i.e. '1' 
+                            w_rwbit <= '1'; 
+
+                            --s_SDA_int <= '1';
+                        end if;
+
+                    when RSTART2 => 
+                        if(phase_cnt = 3) then 
+                            s_sda_int <= i_addr(6);
+                        end if;
+                    
                     when ADDR | ADDR2 | ADDR3 | ADDR4 | ADDR5 | ADDR6 | ADDR7 | RW => 
                     --when ADDR | ADDR2 | ADDR3 | ADDR4 | ADDR5 | ADDR6 | ADDR7 => 
                         if(phase_cnt = 0) then 
                             s_SCL_int <= '1';
+                            
                         end if;
                         if(phase_cnt = 1) then 
                             s_SCL_int <= '1';
+                            if((current_state = RW) and (w_rwbit = '1')) then
+                                s_SDA_EN <= '0'; 
+                            end if;
                         end if;
                         if(phase_cnt = 2) then 
                             s_SCL_int <= '0';
-                        end if;
-                        if(phase_cnt = 3) then
-                            s_SCL_int <= '0';
-                            if(current_state = RW) then
-                                s_SDA_EN <= '0';
-                            else
-                                
 
-                                if(phase_tick = '1') then
-                                    s_SDA_int <= addr_buf(5);
-                                    addr_buf <= addr_buf(5 downto 0) & '0';
-                                    s_SDA_EN <= '1';
+                            if(current_state = RW) then
+                                s_SDA_EN <= '0'; 
+                                if(w_rwbit = '0') then
+                                    --s_SDA_int <= w_rwbit;
+                                    s_SDA_int <= w_rwbit;
+                                else 
+                                    s_SDA_EN <= '0'; 
+                                    s_SDA_int <= '1';
                                 end if;
                             end if;
                         end if;
-                    
+                        if(phase_cnt = 3) then
+                            s_SCL_int <= '0';
+                            
+                            if(phase_tick = '1') then
+                                s_SDA_int <= addr_buf(5);
+                                addr_buf <= addr_buf(5 downto 0) & '0';
+                                --s_SDA_EN <= '1';
+                            end if;
+
+                            if((current_state = ADDR7) and (w_rwbit = '1')) then
+                                s_SDA_EN <= '1'; 
+                                s_SDA_int <= '1';
+                            end if;
+                        end if;
+                   
+                    -- WRITE DATA BITS 
                     when DATA1 | DATA2 | DATA3 | DATA4 | DATA5 | DATA6 | DATA7 | DATA8 =>
                         if(phase_cnt = 0) then 
+                            s_SDA_EN <= '1';
                             s_SCL_int <= '1';
-
+                            s_SDA_int <= '0';
 
                             if((current_state = DATA1) and (phase_tick = '1')) then
                                 byte_cnt <= byte_cnt + 1;
-
-                                
+                                s_ACK_ok <= '0';
                             end if;
                         end if;
                         if(phase_cnt = 1) then 
@@ -335,26 +421,48 @@ architecture i2c_module_write_arch of i2c_module_write is
                         end if;
                         if(phase_cnt = 2) then 
                             s_SCL_int <= '0';
+                            if(current_state = DATA8) then
+                                s_SDA_EN <= '0'; -- release SDA for ACK
+                            end if;
                         end if;
                         if(phase_cnt = 3) then
                             s_SCL_int <= '0';
+                            
                             if(current_state = RW) then
-                                s_SDA_EN <= '0';
+                                --s_SDA_EN <= '0';
                             else
                                 if(phase_tick = '1') then
                                     --s_SDA_int <= data_buf(6);
                                     --addr_buf <= data_buf(6 downto 0) & '0';
-                                    s_SDA_int <= data_buf(7);
+                                    s_SDA_int <= data_buf(7); -- real
+                                    s_SDA_int <= '0'; -- testing
                                     data_buf <= shift_left(data_buf, 1);
-                                    s_SDA_EN <= '1';
                                 end if;
                             end if;
+                        end if;
+
+                    -- READ DATA BITS
+                    when RDATA1 | RDATA2 | RDATA3 | RDATA4 | RDATA5 | RDATA6 | RDATA7 | RDATA8 =>
+                        if(phase_cnt = 0) then
+                            s_SCL_int <= '1';
+                        end if;
+                        if(phase_cnt = 1) then
+                            s_SCL_int <= '1';
+                        end if;
+                        if(phase_cnt = 2) then
+                            --rx_buf(7) <= not To_X01(i_SDA); -- sample ACK
+                            --rx_buf <= shift_left(rx_buf, 1);
+                            s_SCL_int <= '0';
+                        end if;
+                        if(phase_cnt = 3) then
+                            s_SCL_int <= '0';
                         end if;
 
                     when ACK1 | ACKN => 
                         if(phase_cnt = 0) then -- SCL output
                             s_SCL_int <= '1';
                             s_SDA_EN <= '0';
+                            s_SDA_int <= '0'; --testing
                         end if;
                         if(phase_cnt = 1) then 
                             s_SCL_int <= '1';
@@ -362,79 +470,43 @@ architecture i2c_module_write_arch of i2c_module_write is
                         end if;
                         if(phase_cnt = 2) then
                             s_SCL_int <= '0';
-                            --s_ACK_ok <= not To_X01(i_SDA); -- sample ACK
+
+                            if(w_rwbit = '0') then
+                                s_SDA_int <= '0'; --testing forcing low (issue with SDA pulling up unexpectedly)
+                                s_SDA_EN <= '1'; --testing
+                            end if;
+                            if(byte_cnt = 0) then
+                                current_byte <= i_tx_byte;
+                            else 
+                                current_byte <= x"01";
+                            end if;
+                            --current_byte <= i_tx_byte;
+                            --s_SDA_int <= current_byte(7);
+                            data_buf <= shift_left(unsigned(current_byte), 1);
                         end if;
                         if(phase_cnt = 3) then -- SDA output
                             s_SCL_int <= '0';
+                            --s_SDA_EN <= '1';
+                        end if;
+                        
+                     
+                    when MNACK => 
+                        if(phase_cnt = 0) then
                             s_SDA_EN <= '1';
+                            s_SDA_int <= '1';
+                            s_SCL_int <= '1';
+                        end if;
+                        if(phase_cnt = 1) then
+                            s_SCL_int <= '1';
+                        end if;
+                        if(phase_cnt = 2) then
+                            s_SCL_int <= '0';
+                        end if;
+                        if(phase_cnt = 3) then
+                            s_SCL_int <= '0';
+                            s_SDA_int <= '1';
                         end if;
                         
-                        --o_buffer_clear <= '1';     -- set `done`
-
-                        if(byte_cnt = 0) then
-                            current_byte <= i_tx_byte;
-                        else 
-                            current_byte <= x"01";
-                        end if;
-                        --current_byte <= i_tx_byte;
-                        s_SDA_int <= current_byte(7);
-                        data_buf <= shift_left(unsigned(current_byte), 1);
-                        
-                    --when ACKN =>
-                    --    
-                    --    if(phase_cnt = 0) then -- SCL output
-                    --        s_SDA_EN <= '0';
-                    --        s_SDA_int <= '0';
-                    --    end if;
-                    --    if(phase_cnt = 1) then -- SCL output
-                    --        s_SDA_int <= '1';
-                    --    end if;
-                    --    if(phase_cnt = 2) then
-                    --        s_ACK_ok <= not To_X01(i_SDA); -- sample ACK
-                    --        s_SDA_int <= '0';
-                    --        s_SDA_EN <= '1';
-                    --    end if;
-                    --    if(phase_cnt = 3) then -- SDA output
-                    --        
-                    --        s_SDA_EN <= '1';
-                    --        s_SDA_int <= '0';
-                    --        
-                    --        if (byte_cnt < total_bytes) then
-                    --            --o_buffer_clear <= '0';     -- reset OLD
-                    --            current_byte <= i_tx_byte;
-                    --            --s_SDA_int <= current_byte(7);
-                    --            data_buf <= shift_left(unsigned(current_byte), 1);
-                    --        end if;
-                    --    end if;
-
-                    -- OLD DATA SECTION
-                    --when DATA1 | DATA2 | DATA3 | DATA4 | DATA5 | DATA6 | DATA7 | DATA8 =>
-                    --    if(phase_cnt = 0) then
-                    --        s_ack_ok <= '0';
-                    --    end if;
-                    --    if(current_state = DATA1) then
-                    --        --o_buffer_clear <= '0';     -- reset OLD
-                    --        byte_cnt <= byte_cnt + 1;
-                    --    end if;
-                    --    
-                    --    if(phase_cnt = 0) then -- SCL output
---                  --          s_SDA_EN <= '1';
-                    --    end if;
-                    --    if(phase_cnt = 3) then -- SDA output
-                    --        if(current_state = DATA8) then
---                  --              s_SDA_int <= 'Z';
-                    --            --s_SDA_EN <= '0';
-                    --            
-                    --            if (byte_cnt < total_bytes)  then
-                    --                current_byte <= i_tx_byte;
-                    --            end if;
-                    --            o_buffer_clear <= '1';     -- set `done`
-                    --            
-                    --        else 
-                    --            s_SDA_int <= data_buf(7);
-                    --            data_buf <= shift_left(data_buf, 1);
-                    --        end if;
-                    --    end if;
 
                     when STOP => 
                         if(phase_cnt = 0) then 
@@ -457,16 +529,6 @@ architecture i2c_module_write_arch of i2c_module_write is
                             s_SCL_int <= '1';
                         end if;
 
-                    --when STOP2 => 
-                    --    if(phase_cnt = 0) then -- SCL output
-                    --        s_SDA_int <= '1';
-                    --    end if;
-                    --when STOP3 => 
-                    --    if(phase_cnt = 0) then -- SCL output
-                    --        s_SDA_int <= '1';
-                    --    end if;
-                    --    
-                    --    o_busy <= '0';
                     when WAIT_CLEAR => 
                         o_done <= '1';
                         --if(i_done_clear = '1') then
@@ -484,34 +546,42 @@ architecture i2c_module_write_arch of i2c_module_write is
     end process;
 
     with current_state select state_slv <=
-        "00000" when IDLE,
-        "00001" when START,
-        "00010" when START2,
-        "00011" when START3,
-        "00100" when ADDR,
-        "00101" when ADDR2,
-        "00110" when ADDR3,
-        "00111" when ADDR4,
-        "01000" when ADDR5,
-        "01001" when ADDR6,
-        "01010" when ADDR7,
-        "01011" when RW,
-        "01100" when ACK1,
-        "01101" when DATA1,
-        "01110" when DATA2,
-        "01111" when DATA3,
-        "10000" when DATA4,
-        "10001" when DATA5,
-        "10010" when DATA6,
-        "10011" when DATA7,
-        "10100" when DATA8,
-        "10101" when ACKN,
-        "10110" when STOP,
-        "10111" when STOP2,
-        "11000" when STOP3,
-        "11001" when WAIT_CLEAR,
-        "11010" when WAIT_BUF_CLEAR,
-        "11111" when others;
+        "000000" when IDLE,
+        "000001" when START,
+        "000010" when START2,
+        "000011" when RSTART1,
+        "000100" when ADDR,
+        "000101" when ADDR2,
+        "000110" when ADDR3,
+        "000111" when ADDR4,
+        "001000" when ADDR5,
+        "001001" when ADDR6,
+        "001010" when ADDR7,
+        "001011" when RW,
+        "001100" when ACK1,
+        "001101" when DATA1,
+        "001110" when DATA2,
+        "001111" when DATA3,
+        "010000" when DATA4,
+        "010001" when DATA5,
+        "010010" when DATA6,
+        "010011" when DATA7,
+        "010100" when DATA8,
+        "010101" when ACKN,
+        "010110" when STOP,
+        "010111" when RSTART2,
+        --"11000" when STOP3,
+        --"011001" when WAIT_CLEAR,
+        --"011010" when WAIT_BUF_CLEAR,
+        "011000" when RDATA1,
+        "011001" when RDATA2,
+        "011010" when RDATA3,
+        "011011" when RDATA4,
+        "011100" when RDATA5,
+        "011101" when RDATA6,
+        "011110" when RDATA7,
+        "011111" when RDATA8,
+        "100000" when others;
 
         o_state_slv <= state_slv;    
    
